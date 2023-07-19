@@ -16,11 +16,14 @@ package cmd
 import (
 	"encoding/json"
 	"fmt"
+	"os"
 	"time"
 
 	"github.com/davecgh/go-spew/spew"
 	"github.com/gosuri/uitable"
 	"github.com/hipages/php-fpm_exporter/phpfpm"
+	"github.com/prometheus/client_golang/prometheus"
+	"github.com/prometheus/common/expfmt"
 	"github.com/spf13/cobra"
 )
 
@@ -40,6 +43,8 @@ var getCmd = &cobra.Command{
 `,
 	Run: func(cmd *cobra.Command, args []string) {
 		pm := phpfpm.PoolManager{}
+
+		phpfpm.SetConnectionTimeout(scrapeTimeout)
 
 		for _, uri := range scrapeURIs {
 			pm.Add(uri)
@@ -84,6 +89,28 @@ var getCmd = &cobra.Command{
 			fmt.Println(table)
 		case "spew":
 			spew.Dump(pm)
+
+		case "prometheus":
+			exporter := phpfpm.NewExporter(pm)
+			req := prometheus.NewRegistry()
+			err := req.Register(exporter)
+			if err != nil {
+				log.Fatal("Exporter register error ", err)
+			}
+
+			metricFamilies, err := req.Gather()
+			if err != nil {
+				fmt.Println("Failed to gather metrics:", err)
+				return
+			}
+
+			enc := expfmt.NewEncoder(os.Stdout, expfmt.FmtText)
+			for _, mf := range metricFamilies {
+				if err := enc.Encode(mf); err != nil {
+					fmt.Println("Failed to encode metric family:", err)
+				}
+			}
+
 		default:
 			log.Error("Output format not valid.")
 		}
@@ -102,5 +129,6 @@ func init() {
 	// Cobra supports local flags which will only run when this command
 	// is called directly, e.g.:
 	getCmd.Flags().StringSliceVar(&scrapeURIs, "phpfpm.scrape-uri", []string{"tcp://127.0.0.1:9000/status"}, "FastCGI address, e.g. unix:///tmp/php.sock;/status or tcp://127.0.0.1:9000/status")
-	getCmd.Flags().StringVar(&output, "out", "text", "Output format. One of: text, json, spew")
+	getCmd.Flags().StringVar(&output, "out", "text", "Output format. One of: text, json, spew, prometheus")
+	getCmd.Flags().IntVar(&scrapeTimeout, "phpfpm.timeout", 3, "Connect timeout.")
 }

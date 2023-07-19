@@ -33,6 +33,7 @@ var (
 	metricsEndpoint  string
 	scrapeURIs       []string
 	fixProcessCount  bool
+	scrapeTimeout    int
 )
 
 // serverCmd represents the server command
@@ -49,6 +50,8 @@ to quickly create a Cobra application.`,
 		log.Infof("Starting server on %v with path %v", listeningAddress, metricsEndpoint)
 
 		pm := phpfpm.PoolManager{}
+
+		phpfpm.SetConnectionTimeout(scrapeTimeout)
 
 		for _, uri := range scrapeURIs {
 			pm.Add(uri)
@@ -125,6 +128,7 @@ func init() {
 	serverCmd.Flags().StringVar(&metricsEndpoint, "web.telemetry-path", "/metrics", "Path under which to expose metrics.")
 	serverCmd.Flags().StringSliceVar(&scrapeURIs, "phpfpm.scrape-uri", []string{"tcp://127.0.0.1:9000/status"}, "FastCGI address, e.g. unix:///tmp/php.sock;/status or tcp://127.0.0.1:9000/status")
 	serverCmd.Flags().BoolVar(&fixProcessCount, "phpfpm.fix-process-count", false, "Enable to calculate process numbers via php-fpm_exporter since PHP-FPM sporadically reports wrong active/idle/total process numbers.")
+	serverCmd.Flags().IntVar(&scrapeTimeout, "phpfpm.timeout", 3, "Connect timeout.")
 
 	// Workaround since vipers BindEnv is currently not working as expected (see https://github.com/spf13/viper/issues/461)
 

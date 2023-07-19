@@ -18,6 +18,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io/ioutil"
+	"net/http"
 	"net/url"
 	"regexp"
 	"strconv"
@@ -48,6 +49,8 @@ const PoolProcessRequestInfo74 string = "Getting request information"
 const PoolProcessRequestEnding string = "Ending"
 
 var log logger
+
+var connectTimeout int
 
 type logger interface {
 	Info(ar ...interface{})
@@ -156,24 +159,46 @@ func (p *Pool) Update() (err error) {
 		return p.error(err)
 	}
 
-	fcgi, err := fcgiclient.DialTimeout(scheme, address, time.Duration(3)*time.Second)
-	if err != nil {
-		return p.error(err)
-	}
+	var resp *http.Response
 
-	defer fcgi.Close()
+	if scheme == "http" || scheme == "https" {
 
-	env := map[string]string{
-		"SCRIPT_FILENAME": path,
-		"SCRIPT_NAME":     path,
-		"SERVER_SOFTWARE": "go / php-fpm_exporter",
-		"REMOTE_ADDR":     "127.0.0.1",
-		"QUERY_STRING":    "json&full",
-	}
+		req, err := http.NewRequest("GET", p.Address, nil)
+		req.URL.RawQuery = "json&full"
+		req.Header = http.Header{
+			"User-Agent": []string{"go / php-fpm_exporter"},
+		}
+		if err != nil {
+			return p.error(err)
+		}
 
-	resp, err := fcgi.Get(env)
-	if err != nil {
-		return p.error(err)
+		client := http.Client{Timeout: time.Duration(connectTimeout) * time.Second}
+		resp, err = client.Do(req)
+		if err != nil {
+			return p.error(err)
+		}
+
+	} else {
+
+		fcgi, err := fcgiclient.DialTimeout(scheme, address, time.Duration(connectTimeout)*time.Second)
+		if err != nil {
+			return p.error(err)
+		}
+
+		defer fcgi.Close()
+
+		env := map[string]string{
+			"SCRIPT_FILENAME": path,
+			"SCRIPT_NAME":     path,
+			"SERVER_SOFTWARE": "go / php-fpm_exporter",
+			"REMOTE_ADDR":     "127.0.0.1",
+			"QUERY_STRING":    "json&full",
+		}
+
+		resp, err = fcgi.Get(env)
+		if err != nil {
+			return p.error(err)
+		}
 	}
 
 	defer resp.Body.Close()
@@ -307,4 +332,8 @@ func (rd *requestDuration) UnmarshalJSON(b []byte) error {
 // SetLogger configures the used logger
 func SetLogger(logger logger) {
 	log = logger
+}
+
+func SetConnectionTimeout(timeout int) {
+	connectTimeout = timeout
 }

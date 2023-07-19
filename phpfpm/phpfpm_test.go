@@ -122,6 +122,8 @@ func TestParseURL(t *testing.T) {
 	}{
 		{"tcp://127.0.0.1:9000/status", []string{"tcp", "127.0.0.1:9000", "/status"}, nil},
 		{"tcp://127.0.0.1", []string{"tcp", "127.0.0.1", ""}, nil},
+		{"http://127.0.0.1:8080", []string{"http", "127.0.0.1:8080", ""}, nil},
+		{"https://127.0.0.1", []string{"https", "127.0.0.1", ""}, nil},
 		{"unix:///tmp/php.sock;/status", []string{"unix", "/tmp/php.sock", "/status"}, nil},
 		{"unix:///tmp/php.sock", []string{"unix", "/tmp/php.sock", ""}, nil},
 	}
